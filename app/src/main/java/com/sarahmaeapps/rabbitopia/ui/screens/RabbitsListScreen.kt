@@ -91,15 +91,30 @@ fun RabbitListItem(rabbit: Rabbit, onClick: () -> Unit) {
                     )
                 }
                 
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF880015))
-                ) {
-                    Text(
-                        text = rabbit.sex.take(1),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (rabbit.forSale) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = "S",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF880015))
+                    ) {
+                        Text(
+                            text = rabbit.sex.take(1),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
             
