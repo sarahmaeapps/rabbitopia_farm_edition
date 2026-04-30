@@ -26,6 +26,7 @@ import com.sarahmaeapps.rabbitopia.data.SOPRepository
 import com.sarahmaeapps.rabbitopia.model.SOPRecord
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -36,10 +37,17 @@ class SOPViewModel(
     private val rabbitId: String
 ) : ViewModel() {
     val evaluations: StateFlow<List<SOPRecord>> = repository.getEvaluationsForRabbit(rabbitId)
+        .map { list -> list.sortedByDescending { it.date } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addEvaluation(record: SOPRecord) {
-        viewModelScope.launch { repository.addEvaluation(record) }
+        viewModelScope.launch {
+            try {
+                repository.addEvaluation(record)
+            } catch (e: Exception) {
+                android.util.Log.e("SOPViewModel", "Failed to save evaluation", e)
+            }
+        }
     }
 
     fun deleteEvaluation(id: String) {

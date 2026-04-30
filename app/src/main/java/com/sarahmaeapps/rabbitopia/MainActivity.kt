@@ -27,14 +27,27 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.firestore.FirebaseFirestore
+import com.sarahmaeapps.rabbitopia.data.ChatRepository
+import com.sarahmaeapps.rabbitopia.model.ChatMessage
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import com.sarahmaeapps.rabbitopia.ui.screens.*
 import com.sarahmaeapps.rabbitopia.ui.theme.RabbitopiaTheme
 
 class MainActivity : ComponentActivity() {
+    private val chatRepository = ChatRepository()
+    private val adminEmail = "rabbitopiafarm@gmail.com"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         createNotificationChannel()
+        fetchAndSaveFCMToken()
+        startGlobalMessageListener()
+
         setContent {
             RabbitopiaTheme {
                 var showSplash by remember { mutableStateOf(true) }
@@ -74,6 +87,45 @@ class MainActivity : ComponentActivity() {
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    private fun fetchAndSaveFCMToken() {
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            if (!task.isSuccessful) return@addOnCompleteListener
+            val token = task.result
+            val email = adminEmail
+            
+            FirebaseFirestore.getInstance()
+                .collection("admins")
+                .document(email)
+                .set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+        }
+    }
+
+    private fun startGlobalMessageListener() {
+        lifecycleScope.launch {
+            chatRepository.getUnreadMessages(adminEmail).collectLatest { unreadMessages ->
+                unreadMessages.forEach { msg ->
+                    // Trigger a notification if the message is from a customer (not from self)
+                    // and it hasn't been notified yet (isRead check is usually enough for new ones)
+                    showNotification(msg.senderId, msg.text)
+                }
+            }
+        }
+    }
+
+    private fun showNotification(sender: String, text: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = androidx.core.app.NotificationCompat.Builder(this, "CHAT_CHANNEL")
+            .setSmallIcon(R.mipmap.rabbitopia_launcher)
+            .setContentTitle("New Message from $sender")
+            .setContentText(text)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+            .build()
+
+        notificationManager.notify(sender.hashCode(), notification)
     }
 }
 

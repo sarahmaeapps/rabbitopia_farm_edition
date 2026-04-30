@@ -35,7 +35,7 @@ class ChatRepository {
         val lowercaseUserId = userId.trim().lowercase()
         return firestore.collectionGroup("chat")
             .whereEqualTo("receiverId", lowercaseUserId)
-            .whereEqualTo("isRead", false)
+            .whereEqualTo("read", false)
             .snapshots()
             .map { it.toObjects(ChatMessage::class.java) }
     }
@@ -43,6 +43,6 @@ class ChatRepository {
     suspend fun markAsRead(customerEmail: String, messageId: String) {
         val lowercaseEmail = customerEmail.trim().lowercase()
         firestore.collection("messages").document(lowercaseEmail).collection("chat")
-            .document(messageId).update("isRead", true).await()
+            .document(messageId).update("read", true).await()
     }
 }

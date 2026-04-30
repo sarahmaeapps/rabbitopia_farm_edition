@@ -72,7 +72,7 @@ fun ChatScreen(customerEmail: String, customerName: String, onNavigateBack: () -
     // Mark messages from other user as read when they appear
     LaunchedEffect(messages) {
         messages.forEach { msg ->
-            if (msg.receiverId == currentUserId && !msg.isRead) {
+            if (msg.receiverId == currentUserId && !msg.read) {
                 viewModel.markMessageAsRead(msg.id)
             }
         }

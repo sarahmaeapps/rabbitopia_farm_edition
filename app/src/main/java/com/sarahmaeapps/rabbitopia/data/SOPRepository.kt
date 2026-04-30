@@ -1,7 +1,6 @@
 package com.sarahmaeapps.rabbitopia.data
 
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import com.sarahmaeapps.rabbitopia.model.SOPRecord
 import kotlinx.coroutines.flow.Flow
@@ -15,13 +14,21 @@ class SOPRepository {
     fun getEvaluationsForRabbit(rabbitId: String): Flow<List<SOPRecord>> {
         return sopCollection
             .whereEqualTo("rabbitId", rabbitId)
-            .orderBy("date", Query.Direction.DESCENDING)
             .snapshots()
-            .map { it.toObjects(SOPRecord::class.java) }
+            .map { snapshot ->
+                snapshot.toObjects(SOPRecord::class.java)
+            }
     }
 
     suspend fun addEvaluation(record: SOPRecord) {
-        sopCollection.add(record).await()
+        try {
+            android.util.Log.d("SOPRepository", "Attempting to add SOP evaluation for rabbit: ${record.rabbitId}")
+            val docRef = sopCollection.add(record).await()
+            android.util.Log.d("SOPRepository", "SOP evaluation added successfully with ID: ${docRef.id}")
+        } catch (e: Exception) {
+            android.util.Log.e("SOPRepository", "Error adding SOP evaluation: ${e.message}", e)
+            throw e
+        }
     }
 
     suspend fun deleteEvaluation(id: String) {
