@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "8749398516",
+    "project_id": "rabbitopia-834e8",
+    "storage_bucket": "rabbitopia-834e8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:8749398516:android:7d388f7b3477396142a1a1",
+        "android_client_info": {
+          "package_name": "com.sarahmaeapps.rabbitopia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX_TSGRZIfY2EaiXW_DEDIulnEcmhKzmk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
