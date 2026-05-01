@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +31,9 @@ fun RabbitsListScreen(
     viewModel: RabbitViewModel = viewModel()
 ) {
     val rabbits by viewModel.rabbits.collectAsState()
+    val sortedRabbits = remember(rabbits) {
+        rabbits.sortedWith(compareBy<Rabbit> { it.forSale }.thenBy { it.name })
+    }
 
     Scaffold(
         topBar = {
@@ -53,7 +57,10 @@ fun RabbitsListScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            items(rabbits) { rabbit ->
+            items(
+                items = sortedRabbits,
+                key = { it.id }
+            ) { rabbit ->
                 RabbitListItem(rabbit = rabbit, onClick = { onNavigateToRabbitDetail(rabbit.id) })
                 HorizontalDivider()
             }
