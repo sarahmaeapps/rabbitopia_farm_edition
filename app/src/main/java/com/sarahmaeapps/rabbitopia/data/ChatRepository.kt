@@ -28,16 +28,28 @@ class ChatRepository {
     }
 
     fun getUnreadMessages(userId: String): Flow<List<ChatMessage>> {
-        // This is a bit tricky now since messages are nested. 
-        // We'll need a Collection Group Query if we want to find unread messages across all customers efficiently.
-        // For now, let's just use the top-level structure for alerts if possible, or keep as is.
-        // But the user requested messages/{email}/chat.
         val lowercaseUserId = userId.trim().lowercase()
         return firestore.collectionGroup("chat")
             .whereEqualTo("receiverId", lowercaseUserId)
             .whereEqualTo("read", false)
             .snapshots()
-            .map { it.toObjects(ChatMessage::class.java) }
+            .map { querySnapshot ->
+                querySnapshot.toObjects(ChatMessage::class.java)
+            }
+    }
+
+    fun getAllChatThreads(): Flow<List<String>> {
+        // Discovery logic: Look for any message sent to the admin or from the admin
+        val adminEmail = "rabbitopiafarm@gmail.com"
+        return firestore.collectionGroup("chat")
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    val sender = doc.getString("senderId")
+                    val receiver = doc.getString("receiverId")
+                    if (sender == adminEmail) receiver else sender
+                }.filter { it != null && it != adminEmail }.distinct()
+            }
     }
 
     suspend fun markAsRead(customerEmail: String, messageId: String) {

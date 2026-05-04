@@ -42,7 +42,13 @@ fun CustomerDetailScreen(
     var showEditDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(customerId) {
-        customer = viewModel.getCustomerById(customerId)
+        val existing = viewModel.getCustomerById(customerId)
+        if (existing == null) {
+            // It's a new inquiry from an unknown email
+            customer = Customer(id = customerId, name = "New Inquiry", email = customerId)
+        } else {
+            customer = existing
+        }
     }
 
     Scaffold(

@@ -13,9 +13,39 @@ class SalesRepository {
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
     private val salesCollection = firestore.collection("sales")
+    private val listingsCollection = firestore.collection("listings")
 
     fun getAllSales(): Flow<List<Sale>> {
         return salesCollection.snapshots().map { it.toObjects(Sale::class.java) }
+    }
+
+    fun getAllListings(): Flow<List<com.sarahmaeapps.rabbitopia.model.Listing>> {
+        return listingsCollection.orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .snapshots().map { it.toObjects(com.sarahmaeapps.rabbitopia.model.Listing::class.java) }
+    }
+
+    suspend fun addListing(listing: com.sarahmaeapps.rabbitopia.model.Listing, imageUri: Uri? = null) {
+        var finalListing = listing
+        if (imageUri != null) {
+            try {
+                val ref = storage.reference.child("listings/${System.currentTimeMillis()}.jpg")
+                ref.putFile(imageUri).await()
+                val url = ref.downloadUrl.await().toString()
+                finalListing = listing.copy(imagePath = url)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
+        if (finalListing.id.isEmpty()) {
+            listingsCollection.add(finalListing).await()
+        } else {
+            listingsCollection.document(finalListing.id).set(finalListing).await()
+        }
+    }
+
+    suspend fun deleteListing(id: String) {
+        listingsCollection.document(id).delete().await()
     }
 
     suspend fun addSale(sale: Sale, documentUri: Uri? = null) {

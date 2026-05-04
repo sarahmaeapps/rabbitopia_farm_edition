@@ -102,14 +102,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val notifiedMessageIds = mutableSetOf<String>()
+
     private fun startGlobalMessageListener() {
         lifecycleScope.launch {
-            chatRepository.getUnreadMessages(adminEmail).collectLatest { unreadMessages ->
-                unreadMessages.forEach { msg ->
-                    // Trigger a notification if the message is from a customer (not from self)
-                    // and it hasn't been notified yet (isRead check is usually enough for new ones)
-                    showNotification(msg.senderId, msg.text)
+            try {
+                chatRepository.getUnreadMessages(adminEmail).collectLatest { unreadMessages ->
+                    unreadMessages.forEach { msg ->
+                        // Trigger a notification if we haven't notified for this ID yet
+                        if (!notifiedMessageIds.contains(msg.id)) {
+                            try {
+                                showNotification(msg.senderName.ifEmpty { msg.senderId }, msg.text)
+                                notifiedMessageIds.add(msg.id)
+                            } catch (e: Exception) {
+                                android.util.Log.e("MainActivity", "Error showing notification", e)
+                            }
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error in message listener", e)
             }
         }
     }
@@ -168,7 +180,17 @@ fun RabbitopiaApp() {
                         onNavigateToHousing = { navController.navigate("housing") },
                         onNavigateToSales = { navController.navigate("sales_records") },
                         onNavigateToMedical = { navController.navigate("medical") },
-                        onNavigateToCulls = { navController.navigate("culled_rabbits") }
+                        onNavigateToCulls = { navController.navigate("culled_rabbits") },
+                        onNavigateToMessages = { navController.navigate("messages") }
+                    )
+                }
+                composable("messages") {
+                    MessagesScreen(
+                        onNavigateToChat = { email, name -> 
+                            val encodedEmail = java.net.URLEncoder.encode(email, "UTF-8")
+                            navController.navigate("chat/$encodedEmail/$name") 
+                        },
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
                 composable("rabbits") { 

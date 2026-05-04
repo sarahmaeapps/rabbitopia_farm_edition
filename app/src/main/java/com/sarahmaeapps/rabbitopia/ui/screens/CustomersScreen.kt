@@ -32,9 +32,13 @@ import kotlinx.coroutines.launch
 
 class CustomerViewModel(
     private val repository: CustomerRepository = CustomerRepository(),
-    private val salesRepository: SalesRepository = SalesRepository()
+    private val salesRepository: SalesRepository = SalesRepository(),
+    private val chatRepository: com.sarahmaeapps.rabbitopia.data.ChatRepository = com.sarahmaeapps.rabbitopia.data.ChatRepository()
 ) : ViewModel() {
     val customers: StateFlow<List<Customer>> = repository.getAllCustomers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val chatThreads: StateFlow<List<String>> = chatRepository.getAllChatThreads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addCustomer(customer: Customer) {
@@ -64,7 +68,13 @@ fun CustomersScreen(
     viewModel: CustomerViewModel = viewModel()
 ) {
     val customers by viewModel.customers.collectAsState()
+    val chatThreads by viewModel.chatThreads.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Filter threads that don't match an existing customer email
+    val newInquiries = chatThreads.filter { email -> 
+        customers.none { it.email.lowercase() == email.lowercase() }
+    }
 
     Scaffold(
         topBar = {
@@ -78,12 +88,34 @@ fun CustomersScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            FloatingActionButton(onClick = { showAddDialog = true }, containerColor = Color(0xFF880015), contentColor = Color.White) {
                 Icon(Icons.Default.Add, contentDescription = "Add Customer")
             }
         }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding)) {
+        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+            if (newInquiries.isNotEmpty()) {
+                item {
+                    Text("New Inquiries", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold, color = Color(0xFF880015))
+                }
+                items(newInquiries) { email ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToCustomerDetail(email) }
+                            .padding(16.dp)
+                    ) {
+                        Text(text = email, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
+                        Text(text = "Unregistered User (Sent Message)", color = Color.Yellow, fontSize = 12.sp)
+                    }
+                    HorizontalDivider()
+                }
+            }
+
+            item {
+                Text("Registered Customers", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold, color = Color.Gray)
+            }
+
             items(customers) { customer ->
                 Column(
                     modifier = Modifier

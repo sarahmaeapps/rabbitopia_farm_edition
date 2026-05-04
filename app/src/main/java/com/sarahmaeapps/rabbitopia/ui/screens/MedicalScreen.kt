@@ -107,18 +107,18 @@ fun MedicalScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = { dialogType = "Medical"; showAddDialog = true },
+                    onClick = { dialogType = "Health"; showAddDialog = true },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880015))
                 ) {
-                    Text("Add Medical Event", fontSize = 12.sp)
+                    Text("Record Health Event", fontSize = 12.sp)
                 }
                 Button(
-                    onClick = { dialogType = "Non-Medical"; showAddDialog = true },
+                    onClick = { dialogType = "Non-Health"; showAddDialog = true },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                 ) {
-                    Text("Add Health Event", fontSize = 12.sp)
+                    Text("Record Non Health Expense", fontSize = 12.sp)
                 }
             }
 
@@ -185,7 +185,7 @@ fun AddMedicalDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (type == "Medical") "Record Medical Event" else "Record Health Event") },
+        title = { Text(if (type == "Health") "Record Health Event" else "Record Expense") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
@@ -204,15 +204,15 @@ fun AddMedicalDialog(
                         }
                     }
                 }
-                OutlinedTextField(value = condition, onValueChange = { condition = it }, label = { Text(if (type == "Medical") "Condition" else "Event Description") })
-                OutlinedTextField(value = treatment, onValueChange = { treatment = it }, label = { Text("Treatment/Action Taken") })
+                OutlinedTextField(value = condition, onValueChange = { condition = it }, label = { Text(if (type == "Health") "Diagnosis" else "Description") })
+                OutlinedTextField(value = treatment, onValueChange = { treatment = it }, label = { Text(if (type == "Health") "Treatment Course" else "Action/Notes") })
                 OutlinedTextField(
                     value = cost, 
                     onValueChange = { cost = it }, 
                     label = { Text("Cost ($)") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal)
                 )
-                if (type == "Medical") {
+                if (type == "Health") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = isCullingIssue, onCheckedChange = { isCullingIssue = it })
                         Text("Culling Defect (Malocclusion, etc.)")
@@ -286,7 +286,7 @@ fun MedicalDetailScreen(
                 OutlinedTextField(
                     value = r.condition,
                     onValueChange = { viewModel.updateRecord(r.copy(condition = it)) },
-                    label = { Text(if (r.type == "Medical") "Condition" else "Event Description") },
+                    label = { Text(if (r.type == "Health") "Diagnosis" else "Description") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -301,7 +301,7 @@ fun MedicalDetailScreen(
                 OutlinedTextField(
                     value = r.treatment,
                     onValueChange = { viewModel.updateRecord(r.copy(treatment = it)) },
-                    label = { Text("Treatment") },
+                    label = { Text(if (r.type == "Health") "Treatment Course" else "Action/Notes") },
                     modifier = Modifier.fillMaxWidth()
                 )
 

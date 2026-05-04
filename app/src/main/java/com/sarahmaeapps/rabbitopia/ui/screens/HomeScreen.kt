@@ -29,6 +29,7 @@ fun HomeScreen(
     onNavigateToSales: () -> Unit,
     onNavigateToMedical: () -> Unit,
     onNavigateToCulls: () -> Unit,
+    onNavigateToMessages: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val alerts by viewModel.alerts.collectAsState()
@@ -120,15 +121,9 @@ fun HomeScreen(
                 HomeButton("Sales & Records", Modifier.weight(1f), onNavigateToSales)
                 HomeButton("Medical / Health", Modifier.weight(1f), onNavigateToMedical)
             }
-            
-            // Thin Culls Button
-            Button(
-                onClick = onNavigateToCulls,
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-                shape = MaterialTheme.shapes.small,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880015))
-            ) {
-                Text("Culls", fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeButton("Messaging Center", Modifier.weight(1f), onNavigateToMessages)
+                HomeButton("Culls", Modifier.weight(1f), onNavigateToCulls)
             }
         }
     }
