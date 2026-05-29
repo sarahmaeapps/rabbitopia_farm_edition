@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.data.CustomerRepository
 import com.sarahmaeapps.rabbitopia.data.SalesRepository
 import com.sarahmaeapps.rabbitopia.model.Customer
@@ -41,8 +42,16 @@ class CustomerViewModel(
     val chatThreads: StateFlow<List<String>> = chatRepository.getAllChatThreads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addCustomer(customer: Customer) {
-        viewModelScope.launch { repository.addCustomer(customer) }
+    fun addCustomer(customer: Customer, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.addCustomer(customer)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("CustomerViewModel", "Error adding customer", e)
+                onResult(false)
+            }
+        }
     }
 
     suspend fun getCustomerById(id: String): Customer? {
@@ -55,8 +64,16 @@ class CustomerViewModel(
         }
     }
 
-    fun deleteCustomer(id: String) {
-        viewModelScope.launch { repository.deleteCustomer(id) }
+    fun deleteCustomer(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteCustomer(id)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("CustomerViewModel", "Error deleting customer", e)
+                onResult(false)
+            }
+        }
     }
 }
 
@@ -70,6 +87,7 @@ fun CustomersScreen(
     val customers by viewModel.customers.collectAsState()
     val chatThreads by viewModel.chatThreads.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Filter threads that don't match an existing customer email
     val newInquiries = chatThreads.filter { email -> 
@@ -134,7 +152,7 @@ fun CustomersScreen(
         if (showAddDialog) {
             AddCustomerDialog(
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, email, phone, arba, address ->
+                onConfirm = { name, email, phone, arba, address, onResult ->
                     val lowercaseEmail = email.trim().lowercase()
                     viewModel.addCustomer(Customer(
                         name = name, 
@@ -142,8 +160,14 @@ fun CustomersScreen(
                         phone = phone, 
                         arbaNumber = arba,
                         address = address
-                    ))
-                    showAddDialog = false
+                    )) { success ->
+                        onResult(success)
+                        if (success) {
+                            showAddDialog = false
+                        } else {
+                            Toast.makeText(context, "Failed to save customer. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -151,12 +175,13 @@ fun CustomersScreen(
 }
 
 @Composable
-fun AddCustomerDialog(onDismiss: () -> Unit, onConfirm: (String, String, String, String, String) -> Unit) {
+fun AddCustomerDialog(onDismiss: () -> Unit, onConfirm: (String, String, String, String, String, (Boolean) -> Unit) -> Unit) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var arba by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -172,10 +197,22 @@ fun AddCustomerDialog(onDismiss: () -> Unit, onConfirm: (String, String, String,
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, email, phone, arba, address) },
-                enabled = name.isNotBlank() && email.isNotBlank()
-            ) { Text("Add") }
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(name, email, phone, arba, address) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving && name.isNotBlank() && email.isNotBlank()
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Add")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }

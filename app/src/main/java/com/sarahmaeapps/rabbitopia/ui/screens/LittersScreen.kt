@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.data.LitterRepository
 import com.sarahmaeapps.rabbitopia.data.RabbitRepository
 import com.sarahmaeapps.rabbitopia.model.Litter
@@ -46,14 +48,28 @@ class LittersViewModel(
         return rabbitRepository.getRabbitById(id)
     }
 
-    fun addLitter(litter: Litter, kits: List<Rabbit>) {
+    fun addLitter(litter: Litter, kits: List<Rabbit>, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            repository.addLitter(litter, kits)
+            try {
+                repository.addLitter(litter, kits)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("LittersViewModel", "Error adding litter", e)
+                onResult(false)
+            }
         }
     }
 
-    fun deleteLitter(id: String) {
-        viewModelScope.launch { repository.deleteLitter(id) }
+    fun deleteLitter(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteLitter(id)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("LittersViewModel", "Error deleting litter", e)
+                onResult(false)
+            }
+        }
     }
 }
 
@@ -112,13 +128,20 @@ fun LittersScreen(
         }
 
         if (showAddDialog) {
+            val context = LocalContext.current
             AddLitterDialog(
                 dam = dam,
                 breederBucks = breederBucks,
                 onDismiss = { showAddDialog = false },
-                onConfirm = { litter, kits ->
-                    viewModel.addLitter(litter, kits)
-                    showAddDialog = false
+                onConfirm = { litter, kits, onResult ->
+                    viewModel.addLitter(litter, kits) { success ->
+                        onResult(success)
+                        if (success) {
+                            showAddDialog = false
+                        } else {
+                            Toast.makeText(context, "Failed to save litter. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -148,7 +171,7 @@ fun AddLitterDialog(
     dam: Rabbit?,
     breederBucks: List<Rabbit>,
     onDismiss: () -> Unit,
-    onConfirm: (Litter, List<Rabbit>) -> Unit
+    onConfirm: (Litter, List<Rabbit>, (Boolean) -> Unit) -> Unit
 ) {
     var sireId by remember { mutableStateOf("") }
     var bornAliveStr by remember { mutableStateOf("0") }
@@ -156,6 +179,7 @@ fun AddLitterDialog(
     var careScore by remember { mutableStateOf("5") }
     var notes by remember { mutableStateOf("") }
     var expandedSire by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val options09 = (0..9).map { it.toString() }
 
@@ -261,6 +285,8 @@ fun AddLitterDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
                     val randomId = (1000..9999).random().toString()
                     onConfirm(
                         Litter(
@@ -275,12 +301,21 @@ fun AddLitterDialog(
                             notes = notes
                         ),
                         kitsData.toList()
-                    )
+                    ) { success ->
+                        isSaving = false
+                    }
                 },
+                enabled = !isSaving && sireId.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880015))
-            ) { Text("Record & Create Kits") }
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Record & Create Kits")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }
 

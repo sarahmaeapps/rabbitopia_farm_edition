@@ -30,6 +30,7 @@ fun HomeScreen(
     onNavigateToMedical: () -> Unit,
     onNavigateToCulls: () -> Unit,
     onNavigateToMessages: () -> Unit,
+    onNavigateToMarketplace: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val alerts by viewModel.alerts.collectAsState()
@@ -41,6 +42,7 @@ fun HomeScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // ... (Header and Alerts card)
         Text(
             text = "Rabbitopia!",
             fontSize = 56.sp,
@@ -124,6 +126,9 @@ fun HomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HomeButton("Messaging Center", Modifier.weight(1f), onNavigateToMessages)
                 HomeButton("Culls", Modifier.weight(1f), onNavigateToCulls)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeButton("Marketplace", Modifier.fillMaxWidth(), onNavigateToMarketplace)
             }
         }
     }

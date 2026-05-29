@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.data.MedicalRepository
 import com.sarahmaeapps.rabbitopia.data.RabbitRepository
 import com.sarahmaeapps.rabbitopia.model.MedicalRecord
@@ -41,12 +43,18 @@ class MedicalViewModel(
     val rabbits: StateFlow<List<Rabbit>> = rabbitRepository.getActiveRabbits()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addRecord(record: MedicalRecord) {
+    fun addRecord(record: MedicalRecord, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            if (record.id.isNotEmpty()) {
-                medicalRepository.updateRecord(record)
-            } else {
-                medicalRepository.addRecord(record)
+            try {
+                if (record.id.isNotEmpty()) {
+                    medicalRepository.updateRecord(record)
+                } else {
+                    medicalRepository.addRecord(record)
+                }
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("MedicalViewModel", "Error adding medical record", e)
+                onResult(false)
             }
         }
     }
@@ -55,12 +63,28 @@ class MedicalViewModel(
         return medicalRepository.getRecordById(id)
     }
 
-    fun updateRecord(record: MedicalRecord) {
-        viewModelScope.launch { medicalRepository.updateRecord(record) }
+    fun updateRecord(record: MedicalRecord, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                medicalRepository.updateRecord(record)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("MedicalViewModel", "Error updating medical record", e)
+                onResult(false)
+            }
+        }
     }
 
-    fun deleteRecord(id: String) {
-        viewModelScope.launch { medicalRepository.deleteRecord(id) }
+    fun deleteRecord(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                medicalRepository.deleteRecord(id)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("MedicalViewModel", "Error deleting medical record", e)
+                onResult(false)
+            }
+        }
     }
 }
 
@@ -75,6 +99,7 @@ fun MedicalScreen(
     val rabbits by viewModel.rabbits.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var dialogType by remember { mutableStateOf("Medical") }
+    val context = LocalContext.current
 
     val totalCost = records.sumOf { it.cost }
 
@@ -140,9 +165,15 @@ fun MedicalScreen(
                 rabbits = rabbits,
                 type = dialogType,
                 onDismiss = { showAddDialog = false },
-                onConfirm = { record ->
-                    viewModel.addRecord(record)
-                    showAddDialog = false
+                onConfirm = { record, onResult ->
+                    viewModel.addRecord(record) { success ->
+                        onResult(success)
+                        if (success) {
+                            showAddDialog = false
+                        } else {
+                            Toast.makeText(context, "Failed to save record. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -174,7 +205,7 @@ fun AddMedicalDialog(
     rabbits: List<Rabbit>,
     type: String,
     onDismiss: () -> Unit,
-    onConfirm: (MedicalRecord) -> Unit
+    onConfirm: (MedicalRecord, (Boolean) -> Unit) -> Unit
 ) {
     var rabbitId by remember { mutableStateOf("") }
     var condition by remember { mutableStateOf("") }
@@ -182,6 +213,7 @@ fun AddMedicalDialog(
     var cost by remember { mutableStateOf("") }
     var isCullingIssue by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -221,18 +253,32 @@ fun AddMedicalDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(MedicalRecord(
-                    rabbitId = rabbitId,
-                    condition = condition,
-                    treatment = treatment,
-                    cost = cost.toDoubleOrNull() ?: 0.0,
-                    isCullingIssue = isCullingIssue,
-                    type = type
-                ))
-            }) { Text("Record") }
+            Button(
+                onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(MedicalRecord(
+                        rabbitId = rabbitId,
+                        condition = condition,
+                        treatment = treatment,
+                        cost = cost.toDoubleOrNull() ?: 0.0,
+                        isCullingIssue = isCullingIssue,
+                        type = type,
+                        date = System.currentTimeMillis()
+                    )) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving && treatment.isNotEmpty() && rabbitId.isNotEmpty()
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Record")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }
 
@@ -245,6 +291,7 @@ fun MedicalDetailScreen(
 ) {
     var record by remember { mutableStateOf<MedicalRecord?>(null) }
     val rabbits by viewModel.rabbits.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(recordId) {
         record = viewModel.getRecordById(recordId)
@@ -261,8 +308,13 @@ fun MedicalDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        viewModel.deleteRecord(recordId)
-                        onNavigateBack()
+                        viewModel.deleteRecord(recordId) { success ->
+                            if (success) {
+                                onNavigateBack()
+                            } else {
+                                Toast.makeText(context, "Failed to delete record. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
                     }

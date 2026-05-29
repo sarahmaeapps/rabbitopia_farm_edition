@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.data.SOPRepository
 import com.sarahmaeapps.rabbitopia.model.SOPRecord
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,18 +42,28 @@ class SOPViewModel(
         .map { list -> list.sortedByDescending { it.date } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addEvaluation(record: SOPRecord) {
+    fun addEvaluation(record: SOPRecord, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
                 repository.addEvaluation(record)
+                onResult(true)
             } catch (e: Exception) {
                 android.util.Log.e("SOPViewModel", "Failed to save evaluation", e)
+                onResult(false)
             }
         }
     }
 
-    fun deleteEvaluation(id: String) {
-        viewModelScope.launch { repository.deleteEvaluation(id) }
+    fun deleteEvaluation(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteEvaluation(id)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("SOPViewModel", "Error deleting evaluation", e)
+                onResult(false)
+            }
+        }
     }
 }
 
@@ -61,6 +73,7 @@ fun SOPChecklistScreen(
     rabbitId: String, 
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val viewModel: SOPViewModel = viewModel(factory = object : androidx.lifecycle.ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SOPViewModel(rabbitId = rabbitId) as T
@@ -110,7 +123,13 @@ fun SOPChecklistScreen(
                 SOPHistoryList(
                     evaluations = evaluations,
                     modifier = Modifier.padding(padding),
-                    onDelete = { viewModel.deleteEvaluation(it) },
+                    onDelete = { id -> 
+                        viewModel.deleteEvaluation(id) { success ->
+                            if (!success) {
+                                Toast.makeText(context, "Failed to delete evaluation. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
                     onSelect = { selectedRecord = it }
                 )
             }
@@ -118,9 +137,15 @@ fun SOPChecklistScreen(
                 SOPNewEvaluation(
                     rabbitId = rabbitId,
                     modifier = Modifier.padding(padding),
-                    onSave = { 
-                        viewModel.addEvaluation(it)
-                        showHistory = true
+                    onSave = { record, onResult ->
+                        viewModel.addEvaluation(record) { success ->
+                            onResult(success)
+                            if (success) {
+                                showHistory = true
+                            } else {
+                                Toast.makeText(context, "Failed to save evaluation. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 )
             }
@@ -218,8 +243,9 @@ fun SOPHistoryList(
 fun SOPNewEvaluation(
     rabbitId: String, 
     modifier: Modifier = Modifier,
-    onSave: (SOPRecord) -> Unit
+    onSave: (SOPRecord, (Boolean) -> Unit) -> Unit
 ) {
+    var isSaving by remember { mutableStateOf(false) }
     var bodyScore by remember { mutableFloatStateOf(0f) }
     var headEarScore by remember { mutableFloatStateOf(0f) }
     var furScore by remember { mutableFloatStateOf(0f) }
@@ -235,6 +261,7 @@ fun SOPNewEvaluation(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // ... (rest of the sliders and checks)
         Text("General Type (45 pts)", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
         SOPCheckItem("Balanced, compact body", checks, 0)
         SOPCheckItem("Smooth topline (ear base → hip peak → round tail)", checks, 1)
@@ -329,6 +356,8 @@ fun SOPNewEvaluation(
         
         Button(
             onClick = { 
+                if (isSaving) return@Button
+                isSaving = true
                 onSave(SOPRecord(
                     rabbitId = rabbitId,
                     bodyScore = bodyScore.toInt(),
@@ -339,15 +368,22 @@ fun SOPNewEvaluation(
                     totalScore = total.toInt(),
                     recommendation = recommendation,
                     checkedItems = checks.toList()
-                ))
+                )) { success ->
+                    isSaving = false
+                }
             }, 
             modifier = Modifier.fillMaxWidth(), 
+            enabled = !isSaving,
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF880015),
                 contentColor = Color.White
             )
         ) {
-            Text("Save Evaluation")
+            if (isSaving) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            } else {
+                Text("Save Evaluation")
+            }
         }
     }
 }

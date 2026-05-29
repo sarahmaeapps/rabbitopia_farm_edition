@@ -14,6 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.model.CullRecord
 import com.sarahmaeapps.rabbitopia.model.Sale
 import java.text.SimpleDateFormat
@@ -34,6 +36,9 @@ fun SaleCullScreen(
     var salePrice by remember { mutableStateOf("") }
     var customerId by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     val customers by viewModel.customers.collectAsState()
     var customerExpanded by remember { mutableStateOf(false) }
@@ -154,26 +159,47 @@ fun SaleCullScreen(
 
             Button(
                 onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
                     if (isCull) {
                         viewModel.addCullRecord(CullRecord(
                             rabbitId = rabbitId,
                             reason = reasonForCull,
                             processedBy = processedBy,
                             processedFor = processedFor
-                        ))
+                        )) { success ->
+                            isSaving = false
+                            if (success) {
+                                onNavigateBack()
+                            } else {
+                                Toast.makeText(context, "Failed to record cull. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     } else {
                         viewModel.addSale(Sale(
                             amount = salePrice.toDoubleOrNull() ?: 0.0,
                             customerId = customerId,
-                            rabbitId = rabbitId
-                        ))
+                            rabbitId = rabbitId,
+                            category = "Animal"
+                        )) { success ->
+                            isSaving = false
+                            if (success) {
+                                onNavigateBack()
+                            } else {
+                                Toast.makeText(context, "Failed to record sale. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
-                    onNavigateBack()
                 },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880015))
             ) {
-                Text("Confirm ${if (isCull) "Cull" else "Sale"}")
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Confirm ${if (isCull) "Cull" else "Sale"}")
+                }
             }
         }
     }

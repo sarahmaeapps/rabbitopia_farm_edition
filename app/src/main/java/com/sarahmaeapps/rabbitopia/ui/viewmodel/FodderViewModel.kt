@@ -34,45 +34,84 @@ class FodderViewModel(private val repository: FodderRepository = FodderRepositor
             initialValue = emptyList()
         )
 
-    fun addBatch(batch: FodderBatch) {
+    fun addBatch(batch: FodderBatch, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            if (batch.id.isNotEmpty()) {
-                repository.updateBatch(batch)
-            } else {
-                repository.addBatch(batch)
+            try {
+                if (batch.id.isNotEmpty()) {
+                    repository.updateBatch(batch)
+                } else {
+                    repository.addBatch(batch)
+                }
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("FodderViewModel", "Error adding/updating batch", e)
+                onResult(false)
             }
         }
     }
 
-    fun addPurchase(purchase: FeedPurchase) {
+    fun addPurchase(purchase: FeedPurchase, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            if (purchase.id.isNotEmpty()) {
-                repository.updateFeedPurchase(purchase)
-            } else {
-                repository.addFeedPurchase(purchase)
+            try {
+                if (purchase.id.isNotEmpty()) {
+                    repository.updateFeedPurchase(purchase)
+                } else {
+                    repository.addFeedPurchase(purchase)
+                }
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("FodderViewModel", "Error adding/updating purchase", e)
+                onResult(false)
             }
         }
     }
 
-    fun addConditioner(log: ConditionerLog) {
+    fun addConditioner(log: ConditionerLog, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            if (log.id.isNotEmpty()) {
-                repository.updateConditioner(log)
-            } else {
-                repository.addConditioner(log)
+            try {
+                if (log.id.isNotEmpty()) {
+                    repository.updateConditioner(log)
+                } else {
+                    repository.addConditioner(log)
+                }
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("FodderViewModel", "Error adding/updating conditioner", e)
+                onResult(false)
             }
         }
     }
 
-    fun deleteBatch(id: String) {
-        viewModelScope.launch { repository.deleteBatch(id) }
+    fun deleteBatch(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteBatch(id)
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
     }
 
-    fun deletePurchase(id: String) {
-        viewModelScope.launch { repository.deleteFeedPurchase(id) }
+    fun deletePurchase(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteFeedPurchase(id)
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
     }
 
-    fun deleteConditioner(id: String) {
-        viewModelScope.launch { repository.deleteConditioner(id) }
+    fun deleteConditioner(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteConditioner(id)
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
     }
 }

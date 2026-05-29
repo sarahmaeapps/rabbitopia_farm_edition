@@ -66,9 +66,15 @@ fun RabbitDetailScreen(
                     }
                 },
                 actions = {
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     IconButton(onClick = { 
-                        viewModel.deleteRabbit(rabbitId)
-                        onNavigateBack()
+                        viewModel.deleteRabbit(rabbitId) { success ->
+                            if (success) {
+                                onNavigateBack()
+                            } else {
+                                android.widget.Toast.makeText(context, "Failed to delete rabbit. Check your permissions.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
                     }

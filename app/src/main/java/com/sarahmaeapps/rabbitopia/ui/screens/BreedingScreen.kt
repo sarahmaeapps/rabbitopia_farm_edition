@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,21 +21,26 @@ import com.sarahmaeapps.rabbitopia.model.BreedingEvent
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import android.widget.Toast
 
 class BreedingViewModel(private val repository: BreedingRepository = BreedingRepository()) : ViewModel() {
-    fun recordBreeding(damId: String, sireId: String, notes: String) {
-        val breedingDate = System.currentTimeMillis()
-        val dueDate = breedingDate + (31L * 24 * 60 * 60 * 1000)
+    fun recordBreeding(damId: String, sireId: String, notes: String, breedingDate: Long, dueDate: Long, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            repository.addBreedingEvent(
-                BreedingEvent(
-                    damId = damId,
-                    sireId = sireId,
-                    breedingDate = breedingDate,
-                    dueDate = dueDate,
-                    notes = notes
+            try {
+                repository.addBreedingEvent(
+                    BreedingEvent(
+                        damId = damId,
+                        sireId = sireId,
+                        breedingDate = breedingDate,
+                        dueDate = dueDate,
+                        notes = notes
+                    )
                 )
-            )
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("BreedingViewModel", "Error recording breeding", e)
+                onResult(false)
+            }
         }
     }
 }
@@ -46,11 +52,16 @@ fun BreedingScreen(
     onNavigateBack: () -> Unit,
     viewModel: BreedingViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     var mateId by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var breedingDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = breedingDate)
     val sdf = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
-    val breedingDate = System.currentTimeMillis()
+    
     val dueDate = breedingDate + (31L * 24 * 60 * 60 * 1000)
     val weaningDate = dueDate + (56L * 24 * 60 * 60 * 1000) // 8 weeks after due date
 
@@ -85,7 +96,35 @@ fun BreedingScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Breeding Date: ${sdf.format(Date(breedingDate))}", fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = sdf.format(Date(breedingDate)),
+                onValueChange = { },
+                readOnly = true,
+                label = { Text("Breeding Date") },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    TextButton(onClick = { showDatePicker = true }) {
+                        Text("Change")
+                    }
+                }
+            )
+
+            if (showDatePicker) {
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            breedingDate = datePickerState.selectedDateMillis ?: breedingDate
+                            showDatePicker = false
+                        }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
             
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.4f)),
@@ -110,13 +149,26 @@ fun BreedingScreen(
 
             Button(
                 onClick = { 
-                    viewModel.recordBreeding(rabbitId, mateId, notes)
-                    onNavigateBack()
+                    if (isSaving) return@Button
+                    isSaving = true
+                    viewModel.recordBreeding(rabbitId, mateId, notes, breedingDate, dueDate) { success ->
+                        isSaving = false
+                        if (success) {
+                            onNavigateBack()
+                        } else {
+                            Toast.makeText(context, "Failed to record breeding. Check your connection or permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880015))
             ) {
-                Text("Record Breeding")
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Record Breeding")
+                }
             }
         }
     }

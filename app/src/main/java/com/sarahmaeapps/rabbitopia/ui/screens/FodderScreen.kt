@@ -20,6 +20,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.sarahmaeapps.rabbitopia.model.FeedPurchase
+import com.sarahmaeapps.rabbitopia.model.ConditionerLog
 import com.sarahmaeapps.rabbitopia.model.FodderBatch
 import com.sarahmaeapps.rabbitopia.ui.viewmodel.FodderViewModel
 import java.text.SimpleDateFormat
@@ -38,6 +42,7 @@ fun FodderScreen(
     var selectedTab by remember { mutableStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<Any?>(null) }
+    val context = LocalContext.current
 
     val totalSpend = batches.sumOf { it.cost } + purchases.sumOf { it.price } + conditioners.sumOf { it.cost }
     
@@ -102,9 +107,36 @@ fun FodderScreen(
 
         if (showAddDialog) {
             when (selectedTab) {
-                0 -> AddFodderDialog(onDismiss = { showAddDialog = false }, onConfirm = { viewModel.addBatch(it); showAddDialog = false })
-                1 -> AddFeedPurchaseDialog(onDismiss = { showAddDialog = false }, onConfirm = { viewModel.addPurchase(it); showAddDialog = false })
-                2 -> AddConditionerDialog(onDismiss = { showAddDialog = false }, onConfirm = { viewModel.addConditioner(it); showAddDialog = false })
+                0 -> AddFodderDialog(
+                    onDismiss = { showAddDialog = false }, 
+                    onConfirm = { item, onResult -> 
+                        viewModel.addBatch(item) { success ->
+                            onResult(success)
+                            if (success) showAddDialog = false
+                            else Toast.makeText(context, "Failed to save batch. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
+                1 -> AddFeedPurchaseDialog(
+                    onDismiss = { showAddDialog = false }, 
+                    onConfirm = { item, onResult -> 
+                        viewModel.addPurchase(item) { success ->
+                            onResult(success)
+                            if (success) showAddDialog = false
+                            else Toast.makeText(context, "Failed to save purchase. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
+                2 -> AddConditionerDialog(
+                    onDismiss = { showAddDialog = false }, 
+                    onConfirm = { item, onResult -> 
+                        viewModel.addConditioner(item) { success ->
+                            onResult(success)
+                            if (success) showAddDialog = false
+                            else Toast.makeText(context, "Failed to save conditioner. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
             }
         }
 
@@ -113,20 +145,56 @@ fun FodderScreen(
                 is FodderBatch -> AddFodderDialog(
                     initialBatch = item, 
                     onDismiss = { editingItem = null }, 
-                    onConfirm = { viewModel.addBatch(it); editingItem = null },
-                    onDelete = { viewModel.deleteBatch(item.id); editingItem = null }
+                    onConfirm = { batch, onResult -> 
+                        viewModel.addBatch(batch) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to update batch. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onDelete = { onResult ->
+                        viewModel.deleteBatch(item.id) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to delete batch. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 )
                 is com.sarahmaeapps.rabbitopia.model.FeedPurchase -> AddFeedPurchaseDialog(
                     initialPurchase = item,
                     onDismiss = { editingItem = null },
-                    onConfirm = { viewModel.addPurchase(it); editingItem = null },
-                    onDelete = { viewModel.deletePurchase(item.id); editingItem = null }
+                    onConfirm = { purchase, onResult -> 
+                        viewModel.addPurchase(purchase) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to update purchase. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onDelete = { onResult ->
+                        viewModel.deletePurchase(item.id) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to delete purchase. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 )
                 is com.sarahmaeapps.rabbitopia.model.ConditionerLog -> AddConditionerDialog(
                     initialLog = item,
                     onDismiss = { editingItem = null },
-                    onConfirm = { viewModel.addConditioner(it); editingItem = null },
-                    onDelete = { viewModel.deleteConditioner(item.id); editingItem = null }
+                    onConfirm = { log, onResult -> 
+                        viewModel.addConditioner(log) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to update conditioner. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onDelete = { onResult ->
+                        viewModel.deleteConditioner(item.id) { success ->
+                            onResult(success)
+                            if (success) editingItem = null
+                            else Toast.makeText(context, "Failed to delete conditioner. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 )
             }
         }
@@ -188,10 +256,10 @@ fun SupplementsTab(conditioners: List<com.sarahmaeapps.rabbitopia.model.Conditio
 
 @Composable
 fun AddFeedPurchaseDialog(
-    initialPurchase: com.sarahmaeapps.rabbitopia.model.FeedPurchase? = null,
+    initialPurchase: FeedPurchase? = null,
     onDismiss: () -> Unit, 
-    onConfirm: (com.sarahmaeapps.rabbitopia.model.FeedPurchase) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onConfirm: (FeedPurchase, (Boolean) -> Unit) -> Unit,
+    onDelete: (((Boolean) -> Unit) -> Unit)? = null
 ) {
     var brand by remember { mutableStateOf(initialPurchase?.brand ?: "") }
     var supplier by remember { mutableStateOf(initialPurchase?.supplier ?: "") }
@@ -200,6 +268,7 @@ fun AddFeedPurchaseDialog(
     var protein by remember { mutableStateOf(initialPurchase?.proteinPercent?.toString() ?: "") }
     var fiber by remember { mutableStateOf(initialPurchase?.fiberPercent?.toString() ?: "") }
     var fat by remember { mutableStateOf(initialPurchase?.fatPercent?.toString() ?: "") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -224,25 +293,48 @@ fun AddFeedPurchaseDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(com.sarahmaeapps.rabbitopia.model.FeedPurchase(
-                    id = initialPurchase?.id ?: "",
-                    brand = brand,
-                    supplier = supplier,
-                    price = price.toDoubleOrNull() ?: 0.0,
-                    weightLbs = weight.toDoubleOrNull() ?: 0.0,
-                    proteinPercent = protein.toDoubleOrNull() ?: 0.0,
-                    fiberPercent = fiber.toDoubleOrNull() ?: 0.0,
-                    fatPercent = fat.toDoubleOrNull() ?: 0.0
-                ))
-            }) { Text("Save") }
+            Button(
+                onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(FeedPurchase(
+                        id = initialPurchase?.id ?: "",
+                        brand = brand,
+                        supplier = supplier,
+                        price = price.toDoubleOrNull() ?: 0.0,
+                        weightLbs = weight.toDoubleOrNull() ?: 0.0,
+                        proteinPercent = protein.toDoubleOrNull() ?: 0.0,
+                        fiberPercent = fiber.toDoubleOrNull() ?: 0.0,
+                        fatPercent = fat.toDoubleOrNull() ?: 0.0,
+                        purchaseDate = initialPurchase?.purchaseDate ?: System.currentTimeMillis()
+                    )) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Save")
+                }
+            }
         },
         dismissButton = { 
             Row {
                 if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text("Delete", color = Color.Red) }
+                    TextButton(
+                        onClick = {
+                            if (isSaving) return@TextButton
+                            isSaving = true
+                            onDelete { success ->
+                                isSaving = false
+                            }
+                        },
+                        enabled = !isSaving
+                    ) { Text("Delete", color = Color.Red) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
             }
         }
     )
@@ -250,14 +342,15 @@ fun AddFeedPurchaseDialog(
 
 @Composable
 fun AddConditionerDialog(
-    initialLog: com.sarahmaeapps.rabbitopia.model.ConditionerLog? = null,
+    initialLog: ConditionerLog? = null,
     onDismiss: () -> Unit, 
-    onConfirm: (com.sarahmaeapps.rabbitopia.model.ConditionerLog) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onConfirm: (ConditionerLog, (Boolean) -> Unit) -> Unit,
+    onDelete: (((Boolean) -> Unit) -> Unit)? = null
 ) {
     var type by remember { mutableStateOf(initialLog?.type ?: "") }
     var notes by remember { mutableStateOf(initialLog?.notes ?: "") }
     var cost by remember { mutableStateOf(initialLog?.cost?.toString() ?: "") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -270,21 +363,44 @@ fun AddConditionerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { 
-                onConfirm(com.sarahmaeapps.rabbitopia.model.ConditionerLog(
-                    id = initialLog?.id ?: "",
-                    type = type, 
-                    notes = notes,
-                    cost = cost.toDoubleOrNull() ?: 0.0
-                )) 
-            }) { Text(if (initialLog == null) "Log" else "Save") }
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(ConditionerLog(
+                        id = initialLog?.id ?: "",
+                        type = type, 
+                        notes = notes,
+                        cost = cost.toDoubleOrNull() ?: 0.0,
+                        date = initialLog?.date ?: System.currentTimeMillis()
+                    )) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text(if (initialLog == null) "Log" else "Save")
+                }
+            }
         },
         dismissButton = {
             Row {
                 if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text("Delete", color = Color.Red) }
+                    TextButton(
+                        onClick = {
+                            if (isSaving) return@TextButton
+                            isSaving = true
+                            onDelete { success ->
+                                isSaving = false
+                            }
+                        },
+                        enabled = !isSaving
+                    ) { Text("Delete", color = Color.Red) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
             }
         }
     )
@@ -318,12 +434,13 @@ fun FodderBatchItem(batch: FodderBatch) {
 fun AddFodderDialog(
     initialBatch: FodderBatch? = null,
     onDismiss: () -> Unit, 
-    onConfirm: (FodderBatch) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onConfirm: (FodderBatch, (Boolean) -> Unit) -> Unit,
+    onDelete: (((Boolean) -> Unit) -> Unit)? = null
 ) {
     var batchId by remember { mutableStateOf(initialBatch?.batchID ?: "") }
     var temp by remember { mutableStateOf(initialBatch?.temperature?.toString() ?: "") }
     var cost by remember { mutableStateOf(initialBatch?.cost?.toString() ?: "") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -336,22 +453,44 @@ fun AddFodderDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                onConfirm(FodderBatch(
-                    id = initialBatch?.id ?: "",
-                    batchID = batchId,
-                    temperature = temp.toDoubleOrNull() ?: 0.0,
-                    cost = cost.toDoubleOrNull() ?: 0.0,
-                    startDate = initialBatch?.startDate ?: System.currentTimeMillis()
-                ))
-            }) { Text(if (initialBatch == null) "Start Batch" else "Save") }
+            Button(
+                onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(FodderBatch(
+                        id = initialBatch?.id ?: "",
+                        batchID = batchId,
+                        temperature = temp.toDoubleOrNull() ?: 0.0,
+                        cost = cost.toDoubleOrNull() ?: 0.0,
+                        startDate = initialBatch?.startDate ?: System.currentTimeMillis()
+                    )) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text(if (initialBatch == null) "Start Batch" else "Save")
+                }
+            }
         },
         dismissButton = {
             Row {
                 if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text("Delete", color = Color.Red) }
+                    TextButton(
+                        onClick = {
+                            if (isSaving) return@TextButton
+                            isSaving = true
+                            onDelete { success ->
+                                isSaving = false
+                            }
+                        },
+                        enabled = !isSaving
+                    ) { Text("Delete", color = Color.Red) }
                 }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") }
             }
         }
     )

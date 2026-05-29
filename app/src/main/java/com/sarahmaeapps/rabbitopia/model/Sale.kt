@@ -8,5 +8,6 @@ data class Sale(
     val amount: Double = 0.0,
     val customerId: String = "",
     val rabbitId: String = "",
+    val category: String = "Animal", // "Animal" or "Non-Animal"
     val documentImageUrl: String? = null
 )

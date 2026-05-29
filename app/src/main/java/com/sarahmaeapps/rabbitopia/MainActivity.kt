@@ -29,6 +29,8 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.sarahmaeapps.rabbitopia.data.ChatRepository
 import com.sarahmaeapps.rabbitopia.model.ChatMessage
 import androidx.lifecycle.lifecycleScope
@@ -43,6 +45,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize App Check
+        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+            PlayIntegrityAppCheckProviderFactory.getInstance()
+        )
+
         enableEdgeToEdge()
         createNotificationChannel()
         fetchAndSaveFCMToken()
@@ -94,11 +102,13 @@ class MainActivity : ComponentActivity() {
             if (!task.isSuccessful) return@addOnCompleteListener
             val token = task.result
             val email = adminEmail
-            
             FirebaseFirestore.getInstance()
                 .collection("admins")
                 .document(email)
                 .set(mapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                .addOnFailureListener { e ->
+                    android.util.Log.e("MainActivity", "Error saving FCM token to Firestore. Is the user logged in as Admin?", e)
+                }
         }
     }
 
@@ -181,7 +191,8 @@ fun RabbitopiaApp() {
                         onNavigateToSales = { navController.navigate("sales_records") },
                         onNavigateToMedical = { navController.navigate("medical") },
                         onNavigateToCulls = { navController.navigate("culled_rabbits") },
-                        onNavigateToMessages = { navController.navigate("messages") }
+                        onNavigateToMessages = { navController.navigate("messages") },
+                        onNavigateToMarketplace = { navController.navigate("marketplace") }
                     )
                 }
                 composable("messages") {
@@ -319,6 +330,12 @@ fun RabbitopiaApp() {
                     CulledRabbitsScreen(
                         onNavigateBack = { navController.popBackStack() },
                         onNavigateToDetail = { id -> navController.navigate("rabbit_detail/$id") }
+                    )
+                }
+
+                composable("marketplace") {
+                    MarketplaceScreen(
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
 

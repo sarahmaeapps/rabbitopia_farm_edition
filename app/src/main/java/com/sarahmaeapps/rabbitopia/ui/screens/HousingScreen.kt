@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.snapshots
 import com.sarahmaeapps.rabbitopia.model.Hutch
@@ -47,24 +49,40 @@ class HousingViewModel : ViewModel() {
         .snapshots().map { it.toObjects(Rabbit::class.java) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addHutch(hutch: Hutch) {
+    fun addHutch(hutch: Hutch, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            if (hutch.id.isNotEmpty()) {
-                firestore.collection("hutches").document(hutch.id).set(hutch).await()
-            } else {
-                firestore.collection("hutches").add(hutch).await()
+            try {
+                if (hutch.id.isNotEmpty()) {
+                    firestore.collection("hutches").document(hutch.id).set(hutch).await()
+                } else {
+                    firestore.collection("hutches").add(hutch).await()
+                }
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("HousingViewModel", "Error adding hutch", e)
+                onResult(false)
             }
         }
     }
 
     suspend fun getHutchById(id: String): Hutch? {
-        return firestore.collection("hutches").document(id).get().await().toObject(Hutch::class.java)
+        return try {
+            firestore.collection("hutches").document(id).get().await().toObject(Hutch::class.java)
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    fun updateHutch(hutch: Hutch) {
+    fun updateHutch(hutch: Hutch, onResult: (Boolean) -> Unit = {}) {
         if (hutch.id.isNotEmpty()) {
             viewModelScope.launch {
-                firestore.collection("hutches").document(hutch.id).set(hutch).await()
+                try {
+                    firestore.collection("hutches").document(hutch.id).set(hutch).await()
+                    onResult(true)
+                } catch (e: Exception) {
+                    android.util.Log.e("HousingViewModel", "Error updating hutch", e)
+                    onResult(false)
+                }
             }
         }
     }
@@ -79,6 +97,7 @@ fun HousingScreen(
     val hutches by viewModel.hutches.collectAsState()
     val rabbits by viewModel.rabbits.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -113,9 +132,15 @@ fun HousingScreen(
             AddHutchDialog(
                 rabbits = rabbits,
                 onDismiss = { showAddDialog = false },
-                onConfirm = { id, occ ->
-                    viewModel.addHutch(Hutch(hutchId = id, capacity = occ))
-                    showAddDialog = false
+                onConfirm = { id, occ, onResult ->
+                    viewModel.addHutch(Hutch(hutchId = id, capacity = occ)) { success ->
+                        onResult(success)
+                        if (success) {
+                            showAddDialog = false
+                        } else {
+                            Toast.makeText(context, "Failed to save hutch. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -276,12 +301,19 @@ fun HutchDetailScreen(
             }
 
             if (showMaintenanceDialog) {
+                val context = LocalContext.current
                 AddMaintenanceDialog(
                     onDismiss = { showMaintenanceDialog = false },
-                    onConfirm = { desc, cost ->
+                    onConfirm = { desc, cost, onResult ->
                         val newRecord = com.sarahmaeapps.rabbitopia.model.MaintenanceRecord(description = desc, cost = cost)
-                        viewModel.updateHutch(h.copy(maintenanceRecords = h.maintenanceRecords + newRecord))
-                        showMaintenanceDialog = false
+                        viewModel.updateHutch(h.copy(maintenanceRecords = h.maintenanceRecords + newRecord)) { success ->
+                            onResult(success)
+                            if (success) {
+                                showMaintenanceDialog = false
+                            } else {
+                                Toast.makeText(context, "Failed to save maintenance record. Check permissions.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 )
             }
@@ -290,9 +322,10 @@ fun HutchDetailScreen(
 }
 
 @Composable
-fun AddMaintenanceDialog(onDismiss: () -> Unit, onConfirm: (String, Double) -> Unit) {
+fun AddMaintenanceDialog(onDismiss: () -> Unit, onConfirm: (String, Double, (Boolean) -> Unit) -> Unit) {
     var desc by remember { mutableStateOf("") }
     var cost by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -304,9 +337,24 @@ fun AddMaintenanceDialog(onDismiss: () -> Unit, onConfirm: (String, Double) -> U
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(desc, cost.toDoubleOrNull() ?: 0.0) }) { Text("Save") }
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(desc, cost.toDoubleOrNull() ?: 0.0) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Save")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }
 
@@ -314,7 +362,7 @@ fun AddMaintenanceDialog(onDismiss: () -> Unit, onConfirm: (String, Double) -> U
 fun AddHutchDialog(
     rabbits: List<Rabbit>,
     onDismiss: () -> Unit, 
-    onConfirm: (String, Int) -> Unit
+    onConfirm: (String, Int, (Boolean) -> Unit) -> Unit
 ) {
     val letters = ('A'..'Z').map { it.toString() }
     val numbers = (0..9).map { it.toString() }
@@ -323,6 +371,7 @@ fun AddHutchDialog(
     var selectedNumber by remember { mutableStateOf(numbers[0]) }
     var expandedLetter by remember { mutableStateOf(false) }
     var expandedNumber by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val currentHutchId = "$selectedLetter $selectedNumber"
     val occupancy = rabbits.count { it.hutchId == currentHutchId }
@@ -390,8 +439,23 @@ fun AddHutchDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(currentHutchId, occupancy) }) { Text("Create") }
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(currentHutchId, occupancy) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Create")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }

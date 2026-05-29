@@ -40,6 +40,7 @@ fun CustomerDetailScreen(
     var customer by remember { mutableStateOf<Customer?>(null) }
     val sales by viewModel.getSalesForCustomer(customerId).collectAsState(initial = emptyList())
     var showEditDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(customerId) {
         val existing = viewModel.getCustomerById(customerId)
@@ -65,8 +66,13 @@ fun CustomerDetailScreen(
                         Icon(Icons.Default.Edit, contentDescription = "Edit")
                     }
                     IconButton(onClick = {
-                        viewModel.deleteCustomer(customerId)
-                        onNavigateBack()
+                        viewModel.deleteCustomer(customerId) { success ->
+                            if (success) {
+                                onNavigateBack()
+                            } else {
+                                android.widget.Toast.makeText(context, "Failed to delete customer. Check permissions.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red)
                     }
@@ -83,10 +89,16 @@ fun CustomerDetailScreen(
             EditCustomerDialog(
                 customer = customer!!,
                 onDismiss = { showEditDialog = false },
-                onConfirm = { updated ->
-                    viewModel.addCustomer(updated)
-                    customer = updated
-                    showEditDialog = false
+                onConfirm = { updated, onResult ->
+                    viewModel.addCustomer(updated) { success ->
+                        onResult(success)
+                        if (success) {
+                            customer = updated
+                            showEditDialog = false
+                        } else {
+                            android.widget.Toast.makeText(context, "Failed to update customer. Check permissions.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -183,12 +195,13 @@ fun CustomerDetailScreen(
 }
 
 @Composable
-fun EditCustomerDialog(customer: Customer, onDismiss: () -> Unit, onConfirm: (Customer) -> Unit) {
+fun EditCustomerDialog(customer: Customer, onDismiss: () -> Unit, onConfirm: (Customer, (Boolean) -> Unit) -> Unit) {
     var name by remember { mutableStateOf(customer.name) }
     var phone by remember { mutableStateOf(customer.phone) }
     var address by remember { mutableStateOf(customer.address) }
     var arba by remember { mutableStateOf(customer.arbaNumber) }
     var notes by remember { mutableStateOf(customer.notes) }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -203,11 +216,24 @@ fun EditCustomerDialog(customer: Customer, onDismiss: () -> Unit, onConfirm: (Cu
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(customer.copy(name = name, phone = phone, address = address, arbaNumber = arba, notes = notes)) }) {
-                Text("Save")
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(customer.copy(name = name, phone = phone, address = address, arbaNumber = arba, notes = notes)) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Save")
+                }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }
 

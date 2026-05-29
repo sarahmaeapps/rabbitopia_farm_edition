@@ -40,7 +40,7 @@ class RabbitViewModel(private val repository: RabbitRepository = RabbitRepositor
             initialValue = emptyList()
         )
 
-    fun addRabbit(rabbit: Rabbit, imageUri: Uri? = null, onComplete: () -> Unit = {}) {
+    fun addRabbit(rabbit: Rabbit, imageUri: Uri? = null, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             try {
                 if (rabbit.id.isNotEmpty()) {
@@ -52,10 +52,10 @@ class RabbitViewModel(private val repository: RabbitRepository = RabbitRepositor
                         repository.addRabbit(rabbit)
                     }
                 }
+                onResult(true)
             } catch (e: Exception) {
                 android.util.Log.e("RabbitViewModel", "Error adding/updating rabbit", e)
-            } finally {
-                onComplete()
+                onResult(false)
             }
         }
     }
@@ -68,7 +68,15 @@ class RabbitViewModel(private val repository: RabbitRepository = RabbitRepositor
         return repository.getRabbitFlow(id)
     }
 
-    fun deleteRabbit(id: String) {
-        viewModelScope.launch { repository.deleteRabbit(id) }
+    fun deleteRabbit(id: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.deleteRabbit(id)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("RabbitViewModel", "Error deleting rabbit", e)
+                onResult(false)
+            }
+        }
     }
 }

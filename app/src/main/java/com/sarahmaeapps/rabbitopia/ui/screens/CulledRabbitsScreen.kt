@@ -14,9 +14,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sarahmaeapps.rabbitopia.model.Rabbit
 import com.sarahmaeapps.rabbitopia.ui.viewmodel.RabbitViewModel
@@ -65,13 +67,20 @@ fun CulledRabbitsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val context = LocalContext.current
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = "Name: ${rabbit.name}", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)
                             Text(text = "Ear Tattoo: ${rabbit.earTattoo}", color = Color.White)
                             Text(text = "DOC: ${rabbit.dateOfCull?.let { sdf.format(Date(it)) } ?: "N/A"}", color = Color.White, fontWeight = FontWeight.Medium)
                             Text(text = "Reason: ${rabbit.cullReason ?: "N/A"}", color = Color.White.copy(alpha = 0.8f), maxLines = 1)
                         }
-                        IconButton(onClick = { viewModel.deleteRabbit(rabbit.id) }) {
+                        IconButton(onClick = { 
+                            viewModel.deleteRabbit(rabbit.id) { success ->
+                                if (!success) {
+                                    Toast.makeText(context, "Failed to delete rabbit. Check your permissions.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f))
                         }
                     }

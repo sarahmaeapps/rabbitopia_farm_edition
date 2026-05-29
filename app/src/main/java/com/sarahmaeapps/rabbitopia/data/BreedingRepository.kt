@@ -33,7 +33,11 @@ class BreedingRepository {
     }
 
     suspend fun addBreedingEvent(event: BreedingEvent) {
-        breedingCollection.add(event).await()
+        val docRef = breedingCollection.document()
+        val eventWithId = event.copy(id = docRef.id)
+        android.util.Log.d("BreedingRepository", "Adding breeding event with ID: ${docRef.id}")
+        docRef.set(eventWithId).await()
+        android.util.Log.d("BreedingRepository", "Breeding event added successfully")
     }
 
     suspend fun deleteBreedingEvent(id: String) {

@@ -28,20 +28,25 @@ class SalesRepository {
         var finalListing = listing
         if (imageUri != null) {
             try {
+                android.util.Log.d("SalesRepository", "Uploading marketplace image...")
                 val ref = storage.reference.child("listings/${System.currentTimeMillis()}.jpg")
                 ref.putFile(imageUri).await()
                 val url = ref.downloadUrl.await().toString()
                 finalListing = listing.copy(imagePath = url)
+                android.util.Log.d("SalesRepository", "Image uploaded: $url")
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("SalesRepository", "Image upload failed", e)
+                throw e // Propagate to ViewModel for proper result handling
             }
         }
         
         if (finalListing.id.isEmpty()) {
-            listingsCollection.add(finalListing).await()
+            val docRef = listingsCollection.document()
+            listingsCollection.document(docRef.id).set(finalListing.copy(id = docRef.id)).await()
         } else {
             listingsCollection.document(finalListing.id).set(finalListing).await()
         }
+        android.util.Log.d("SalesRepository", "Listing saved to Firestore")
     }
 
     suspend fun deleteListing(id: String) {

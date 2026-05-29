@@ -33,6 +33,8 @@ import com.sarahmaeapps.rabbitopia.model.CullRecord
 import com.sarahmaeapps.rabbitopia.model.Customer
 import com.sarahmaeapps.rabbitopia.model.Rabbit
 import com.sarahmaeapps.rabbitopia.model.Sale
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.model.Listing
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,16 +69,40 @@ class SalesViewModel(
         list.filter { it.forSale }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addSale(sale: Sale, documentUri: Uri? = null) {
-        viewModelScope.launch { salesRepository.addSale(sale, documentUri) }
+    fun addSale(sale: Sale, documentUri: Uri? = null, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                salesRepository.addSale(sale, documentUri)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("SalesViewModel", "Error adding sale", e)
+                onResult(false)
+            }
+        }
     }
 
-    fun addCullRecord(record: CullRecord) {
-        viewModelScope.launch { cullRepository.addCullRecord(record) }
+    fun addCullRecord(record: CullRecord, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                cullRepository.addCullRecord(record)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("SalesViewModel", "Error adding cull record", e)
+                onResult(false)
+            }
+        }
     }
 
-    fun addListing(listing: Listing, imageUri: Uri? = null) {
-        viewModelScope.launch { salesRepository.addListing(listing, imageUri) }
+    fun addListing(listing: Listing, imageUri: Uri? = null, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                salesRepository.addListing(listing, imageUri)
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("SalesViewModel", "Error adding listing", e)
+                onResult(false)
+            }
+        }
     }
 
     fun deleteListing(id: String) {
@@ -160,9 +186,11 @@ fun SalesScreen(
             } else if (selectedTab == 2) {
                 AddItemListingDialog(
                     onDismiss = { showAddDialog = false },
-                    onConfirm = { listing, uri ->
-                        viewModel.addListing(listing, uri)
-                        showAddDialog = false
+                    onConfirm = { listing, uri, onResult ->
+                        viewModel.addListing(listing, uri) { success ->
+                            onResult(success)
+                            if (success) showAddDialog = false
+                        }
                     }
                 )
             }
@@ -172,22 +200,47 @@ fun SalesScreen(
 
 @Composable
 fun RevenueTab(sales: List<Sale>, customers: List<Customer>, rabbits: List<Rabbit>, onNavigateToSaleDetail: (String) -> Unit) {
+    var selectedCategory by remember { mutableStateOf("All") }
+    val categories = listOf("All", "Animal", "Non-Animal")
+
+    val filteredSales = if (selectedCategory == "All") sales else sales.filter { it.category == selectedCategory }
+
     Column {
-        val totalRevenue = sales.sumOf { it.amount }
+        val totalRevenue = filteredSales.sumOf { it.amount }
         Card(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Total Revenue", fontWeight = FontWeight.Bold)
+                Text("Revenue: $selectedCategory", fontWeight = FontWeight.Bold)
                 Text("$${String.format(Locale.getDefault(), "%.2f", totalRevenue)}", fontSize = 24.sp, fontWeight = FontWeight.Black)
             }
         }
 
+        ScrollableTabRow(
+            selectedTabIndex = categories.indexOf(selectedCategory),
+            edgePadding = 16.dp,
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            divider = {}
+        ) {
+            categories.forEach { category ->
+                Tab(
+                    selected = selectedCategory == category,
+                    onClick = { selectedCategory = category },
+                    text = { Text(category) }
+                )
+            }
+        }
+
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(sales) { sale ->
+            items(filteredSales) { sale ->
                 val customerName = customers.find { it.id == sale.customerId }?.name ?: "Unknown"
-                val rabbitName = rabbits.find { it.id == sale.rabbitId }?.name ?: "Unknown"
+                val rabbitName = if (sale.category == "Animal") {
+                    rabbits.find { it.id == sale.rabbitId }?.name ?: "Unknown"
+                } else {
+                    "Non-Animal Item"
+                }
                 SaleItem(sale, customerName, rabbitName, onClick = { onNavigateToSaleDetail(sale.id) })
                 HorizontalDivider()
             }
@@ -256,37 +309,59 @@ fun ItemsTab(listings: List<Listing>, onDelete: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddItemListingDialog(onDismiss: () -> Unit, onConfirm: (Listing, Uri?) -> Unit) {
+fun AddItemListingDialog(onDismiss: () -> Unit, onConfirm: (Listing, Uri?, (Boolean) -> Unit) -> Unit) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selectedUri = it }
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("List Misc Item") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Item Name") })
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, minLines = 3)
-                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price ($)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Item Name") }, enabled = !isSaving)
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, minLines = 3, enabled = !isSaving)
+                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price ($)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal), enabled = !isSaving)
                 
-                Button(onClick = { launcher.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { launcher.launch("image/*") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving
+                ) {
                     Text(if (selectedUri == null) "Add Photo" else "Photo Attached ✅")
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { 
-                onConfirm(Listing(
-                    name = name, 
-                    description = description, 
-                    price = price.toDoubleOrNull() ?: 0.0
-                ), selectedUri)
-            }) { Text("Post Listing") }
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(Listing(
+                        name = name, 
+                        description = description, 
+                        price = price.toDoubleOrNull() ?: 0.0
+                    ), selectedUri) { success ->
+                        isSaving = false
+                        if (!success) {
+                            Toast.makeText(context, "Failed to save listing. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                enabled = !isSaving && name.isNotEmpty() && price.isNotEmpty()
+            ) { 
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Post Listing")
+                }
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Cancel") } }
     )
 }
 
@@ -442,7 +517,8 @@ fun AddSaleDialog(
                     onConfirm(Sale(
                         amount = if (isSaleMode) (amount.toDoubleOrNull() ?: 0.0) else 0.0,
                         customerId = if (isSaleMode) selectedCustomerId else "SYSTEM_DOC",
-                        rabbitId = if (isSaleMode) selectedRabbitId else "SYSTEM_DOC"
+                        rabbitId = if (isSaleMode) selectedRabbitId else "SYSTEM_DOC",
+                        category = "Animal"
                     ), selectedUri)
                 },
                 enabled = (isSaleMode && selectedCustomerId.isNotEmpty() && selectedRabbitId.isNotEmpty() && amount.isNotEmpty()) || (!isSaleMode && selectedUri != null)

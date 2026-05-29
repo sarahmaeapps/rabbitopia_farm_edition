@@ -14,9 +14,9 @@ class CullRepository {
             val newCullRef = cullsCollection.document()
             transaction.set(newCullRef, record)
             
-            // Update rabbit status to Culled
+            // Update rabbit status to Cull (to match the query in CulledRabbitsScreen)
             val rabbitRef = firestore.collection("rabbits").document(record.rabbitId)
-            transaction.update(rabbitRef, "status", "Culled")
+            transaction.update(rabbitRef, "status", "Cull")
         }.await()
     }
 }

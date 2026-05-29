@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.data.WeighInRepository
 import com.sarahmaeapps.rabbitopia.model.WeighInRecord
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,9 +34,22 @@ class WeighInViewModel(
     val weighIns: StateFlow<List<WeighInRecord>> = repository.getWeighInsForRabbit(rabbitId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addWeighIn(weight: Double, notes: String) {
+    fun addWeighIn(weight: Double, notes: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            repository.addWeighIn(WeighInRecord(rabbitId = rabbitId, weight = weight, notes = notes))
+            try {
+                repository.addWeighIn(
+                    WeighInRecord(
+                        rabbitId = rabbitId,
+                        weight = weight,
+                        notes = notes,
+                        date = System.currentTimeMillis()
+                    )
+                )
+                onResult(true)
+            } catch (e: Exception) {
+                android.util.Log.e("WeighInViewModel", "Error adding weigh-in", e)
+                onResult(false)
+            }
         }
     }
 }
@@ -82,11 +97,18 @@ fun WeighInScreen(rabbitId: String, onNavigateBack: () -> Unit) {
         }
 
         if (showAddDialog) {
+            val context = LocalContext.current
             AddWeighInDialog(
                 onDismiss = { showAddDialog = false },
-                onConfirm = { weight, notes ->
-                    viewModel.addWeighIn(weight, notes)
-                    showAddDialog = false
+                onConfirm = { weight, notes, onResult ->
+                    viewModel.addWeighIn(weight, notes) { success ->
+                        onResult(success)
+                        if (success) {
+                            showAddDialog = false
+                        } else {
+                            Toast.makeText(context, "Failed to save weigh-in. Check permissions.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -108,9 +130,10 @@ fun WeighInItem(record: WeighInRecord) {
 }
 
 @Composable
-fun AddWeighInDialog(onDismiss: () -> Unit, onConfirm: (Double, String) -> Unit) {
+fun AddWeighInDialog(onDismiss: () -> Unit, onConfirm: (Double, String, (Boolean) -> Unit) -> Unit) {
     var weight by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -131,7 +154,22 @@ fun AddWeighInDialog(onDismiss: () -> Unit, onConfirm: (Double, String) -> Unit)
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(weight.toDoubleOrNull() ?: 0.0, notes) }) { Text("Record") }
+            Button(
+                onClick = { 
+                    if (isSaving) return@Button
+                    isSaving = true
+                    onConfirm(weight.toDoubleOrNull() ?: 0.0, notes) { success ->
+                        isSaving = false
+                    }
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Text("Record")
+                }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

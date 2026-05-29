@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import com.sarahmaeapps.rabbitopia.model.Rabbit
 import com.sarahmaeapps.rabbitopia.ui.viewmodel.RabbitViewModel
 import java.text.SimpleDateFormat
@@ -71,6 +73,7 @@ fun AddEditRabbitScreen(
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         selectedUri = it
     }
+    val context = LocalContext.current
 
     // Auto-calculate Generation Count
     LaunchedEffect(sireId, damId) {
@@ -445,9 +448,13 @@ fun AddEditRabbitScreen(
                         cullReason = if (status == "Cull") cullReason else null
                     )
                     
-                    viewModel.addRabbit(rabbit, selectedUri) {
+                    viewModel.addRabbit(rabbit, selectedUri) { success ->
                         isSaving = false
-                        onNavigateBack()
+                        if (success) {
+                            onNavigateBack()
+                        } else {
+                            Toast.makeText(context, "Failed to save rabbit. Check your permissions.", Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
